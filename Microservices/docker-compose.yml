@@ -1,0 +1,38 @@
+version: '3'
+services:
+  catalog:
+    build: ./Catalog
+    container_name: catalog
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./Catalog/catalog.db:/usr/src/app/catalog.db
+    networks:
+      - books
+
+  order:
+    build: ./Order
+    container_name: order
+    ports:
+      - "3001:3001"
+    depends_on:
+      - catalog
+    volumes:
+      - ./Order/orders.db:/usr/src/app/orders.db
+    networks:
+      - books
+
+  frontend:
+    build: ./Frontend
+    container_name: frontend
+    ports:
+      - "4000:4000"
+    depends_on:
+      - catalog
+      - order
+    networks:
+      - books
+
+networks:
+  books:
+    driver: bridge
