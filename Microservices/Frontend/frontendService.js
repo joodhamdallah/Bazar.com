@@ -4,8 +4,9 @@ const axios = require('axios');
 const app = express();
 const PORT = 4000;
 
-// Base URL of the catalog service
+// Base URLs of the catalog and order services
 const CATALOG_SERVICE_URL = 'http://localhost:3000';
+const ORDER_SERVICE_URL = 'http://localhost:3001';
 
 app.use(express.json());
 
@@ -36,6 +37,16 @@ app.put('/update', async (req, res) => {
         res.json(response.data);
     } catch (error) {
         res.status(500).json({ error: "Error updating book in catalog service" });
+    }
+});
+
+// Endpoint to process purchase requests
+app.post('/purchase', async (req, res) => {
+    try {
+        const response = await axios.post(`${ORDER_SERVICE_URL}/purchase`, req.body);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: "Error processing purchase through order service" });
     }
 });
 
