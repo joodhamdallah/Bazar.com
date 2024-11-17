@@ -13,28 +13,37 @@ app.get('/search/:topic', (req, res) => {
     // Call the dbQueries function to find books by the specified topic
     dbQueries.queryBooksByTopic(topic, (err, rows) => {
         if (err) {
-            res.status(500).json({ error: "Error querying books by topic" });
-        } else if (rows.length === 0) {  // No books found for the specified topic
-            res.status(404).json({ message: `No books found for topic: ${topic}` });
+            const errorMessage = { error: "Error querying books by topic" };
+            console.log("Search by topic Response:", errorMessage); // Log error response
+            res.status(500).json(errorMessage);
+        } else if (rows.length === 0) {
+            const notFoundMessage = { message: `No books found for topic: ${topic}` };
+            console.log("Search by topic Response:", notFoundMessage); // Log no books found response
+            res.status(404).json(notFoundMessage);
         } else {
-            res.status(200).json(rows);  // Successfully found books
+            console.log("Search by topic Response:", rows); // Log successful response
+            res.status(200).json(rows); // Successfully found books
         }
     });
 });
 
-
 // Endpoint to get book information by item number
 app.get('/info/:item_number', (req, res) => {
-    const item_number = req.params.item_number;   // Extract the item_number parameter from the URL
+    const item_number = req.params.item_number; // Extract the item_number parameter from the URL
     
-      // Call the dbQueries function to get information about the specified book
+    // Call the dbQueries function to get information about the specified book
     dbQueries.queryBookById(item_number, (err, row) => {
         if (err) {
-            res.status(500).json({ error: "Error querying book by item number" });
+            const errorMessage = { error: "Error querying book by item number" };
+            console.log("Item info Response:", errorMessage); // Log error response
+            res.status(500).json(errorMessage);
         } else if (!row) {
-            res.status(404).json({ error: `Book with item number ${item_number} not found` });
+            const notFoundMessage = { error: `Book with item number ${item_number} not found` };
+            console.log("Item info Response:", notFoundMessage); // Log book not found response
+            res.status(404).json(notFoundMessage);
         } else {
-            res.status(200).json(row);  // Successfully found book
+            console.log("Item info Response:", row); // Log successful response
+            res.status(200).json(row); // Successfully found book
         }
     });
 });
@@ -46,14 +55,21 @@ app.put('/update', (req, res) => {
     // Call the dbQueries function to update the book's quantity and price
     dbQueries.updateBook(item_number, newStock, newPrice, (err, changes) => {
         if (err) {
-            res.status(500).json({ error: "Error updating book" });
+            const errorMessage = { error: "Error updating book" };
+            console.log("Update item Response:", errorMessage); // Log error response
+            res.status(500).json(errorMessage);
         } else if (changes === 0) {
-            res.status(404).json({ error: "Book not found" });
+            const notFoundMessage = { error: "Book not found" };
+            console.log("Update item Response:", notFoundMessage); // Log book not found response
+            res.status(404).json(notFoundMessage);
         } else {
-            res.json({ message: "Book updated successfully" });
+            const successMessage = { message: "Book updated successfully" };
+            console.log("Update item Response:", successMessage); // Log successful response
+            res.json(successMessage);
         }
     });
 });
+
 
 // Start the server
 app.listen(PORT, () => {
