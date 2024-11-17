@@ -1,8 +1,8 @@
 version: '3'
 services:
-  catalog:
+  catalog_1:
     build: ./Catalog
-    container_name: catalog
+    container_name: catalog_1
     ports:
       - "3000:3000"
     volumes:
@@ -10,13 +10,31 @@ services:
     networks:
       - books
 
-  order:
+  catalog_2:
+    build: ./Catalog
+    container_name: catalog_2
+    ports:
+      - "3002:3000" # Expose a different port for the second replica
+    volumes:
+      - ./Catalog/catalog.db:/usr/src/app/catalog.db
+    networks:
+      - books
+
+  order_1:
     build: ./Order
-    container_name: order
+    container_name: order_1
     ports:
       - "3001:3001"
-    depends_on:
-      - catalog
+    volumes:
+      - ./Order/orders.db:/usr/src/app/orders.db
+    networks:
+      - books
+
+  order_2:
+    build: ./Order
+    container_name: order_2
+    ports:
+      - "3003:3001" # Expose a different port for the second replica
     volumes:
       - ./Order/orders.db:/usr/src/app/orders.db
     networks:
@@ -28,8 +46,10 @@ services:
     ports:
       - "4000:4000"
     depends_on:
-      - catalog
-      - order
+      - catalog_1
+      - catalog_2
+      - order_1
+      - order_2
     networks:
       - books
 

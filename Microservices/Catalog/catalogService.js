@@ -1,74 +1,104 @@
-// catalogService.js
-const express = require('express'); //Import Express framework to create a web server and handle routes
-const dbQueries = require('./dbQueries'); //Import dbQueries module which contains functions to interact with catalog DB
-const app = express(); //Initialize an Express application
-const PORT = 3000; // Define the port the catalogService will listen on
+const express = require('express');
+const dbQueries = require('./dbQueries');
+const axios = require('axios');
+const app = express();
+const PORT = 3000;
 
-app.use(express.json()); //Use express.json() middleware to parse JSON bodies in requests
+app.use(express.json());
+
+// Define replicas for synchronization
+const replicas = [
+    'http://catalog_1:3000', // First replica
+    'http://catalog_2:3000', // Second replica
+];
 
 // Endpoint to search for books by topic
 app.get('/search/:topic', (req, res) => {
-    const topic = req.params.topic; // Extract the topic parameter from the URL
-    
-    // Call the dbQueries function to find books by the specified topic
+    const topic = req.params.topic;
+
     dbQueries.queryBooksByTopic(topic, (err, rows) => {
         if (err) {
-            const errorMessage = { error: "Error querying books by topic" };
-            console.log("Search by topic Response:", errorMessage); // Log error response
-            res.status(500).json(errorMessage);
+            console.error('Error querying books by topic:', err.message);
+            res.status(500).json({ error: 'Error querying books by topic' });
         } else if (rows.length === 0) {
-            const notFoundMessage = { message: `No books found for topic: ${topic}` };
-            console.log("Search by topic Response:", notFoundMessage); // Log no books found response
-            res.status(404).json(notFoundMessage);
+            res.status(404).json({ message: `No books found for topic: ${topic}` });
         } else {
-            console.log("Search by topic Response:", rows); // Log successful response
-            res.status(200).json(rows); // Successfully found books
+            res.status(200).json(rows);
         }
     });
 });
 
 // Endpoint to get book information by item number
 app.get('/info/:item_number', (req, res) => {
-    const item_number = req.params.item_number; // Extract the item_number parameter from the URL
-    
-    // Call the dbQueries function to get information about the specified book
+    const item_number = req.params.item_number;
+
     dbQueries.queryBookById(item_number, (err, row) => {
         if (err) {
-            const errorMessage = { error: "Error querying book by item number" };
-            console.log("Item info Response:", errorMessage); // Log error response
-            res.status(500).json(errorMessage);
+            console.error('Error querying book by item number:', err.message);
+            res.status(500).json({ error: 'Error querying book by item number' });
         } else if (!row) {
-            const notFoundMessage = { error: `Book with item number ${item_number} not found` };
-            console.log("Item info Response:", notFoundMessage); // Log book not found response
-            res.status(404).json(notFoundMessage);
+            res.status(404).json({ error: `Book with item number ${item_number} not found` });
         } else {
-            console.log("Item info Response:", row); // Log successful response
-            res.status(200).json(row); // Successfully found book
+            res.status(200).json(row);
         }
     });
 });
 
 // Endpoint to update book quantity and price by item number
-app.put('/update', (req, res) => {
-    const { item_number, newStock, newPrice } = req.body; // Extract the item_number, newStock, and newPrice values from the request body
+app.put('/update', async (req, res) => {
+    const { item_number, newStock, newPrice, source } = req.body;
+    console.log(`Received update request: item_number=${item_number}, newStock=${newStock}, newPrice=${newPrice}, source=${source || 'none'}`);
 
-    // Call the dbQueries function to update the book's quantity and price
-    dbQueries.updateBook(item_number, newStock, newPrice, (err, changes) => {
-        if (err) {
-            const errorMessage = { error: "Error updating book" };
-            console.log("Update item Response:", errorMessage); // Log error response
-            res.status(500).json(errorMessage);
-        } else if (changes === 0) {
-            const notFoundMessage = { error: "Book not found" };
-            console.log("Update item Response:", notFoundMessage); // Log book not found response
-            res.status(404).json(notFoundMessage);
-        } else {
-            const successMessage = { message: "Book updated successfully" };
-            console.log("Update item Response:", successMessage); // Log successful response
-            res.json(successMessage);
+    try {
+        // Update local database
+        const changes = await new Promise((resolve, reject) => {
+            dbQueries.updateBook(item_number, newStock, newPrice, (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
+        });
+
+        if (changes === 0) {
+            console.log(`Item not found: ${item_number}`);
+            return res.status(404).json({ error: 'Book not found' });
         }
-    });
+
+        console.log(`Book updated successfully in local database: item_number=${item_number}`);
+
+        // Propagate update to all replicas, excluding the source
+        for (const replica of replicas) {
+            if (replica !== `http://${req.hostname}:${PORT}` && replica !== source) {
+                try {
+                    console.log(`Propagating update to replica: ${replica}`);
+                    await axios.put(`${replica}/update`, {
+                        item_number,
+                        newStock,
+                        newPrice,
+                        source: `http://${req.hostname}:${PORT}` // Set current replica as the source
+                    }, { timeout: 5000 });
+                    console.log(`Successfully updated replica: ${replica}`);
+                } catch (error) {
+                    console.error(`Failed to update replica: ${replica}`, error.message);
+                }
+            }
+        }
+
+        // Invalidate cache in the frontend service
+        try {
+            console.log(`Invalidating cache for item_number: ${item_number} in frontend service`);
+            await axios.post(`${frontendURL}/invalidate-cache`, { item_number });
+            console.log(`Cache invalidated for item_number: ${item_number}`);
+        } catch (error) {
+            console.error(`Failed to invalidate cache for item_number: ${item_number} in frontend service`, error.message);
+        }
+
+        return res.json({ message: 'Book updated successfully on this replica' });
+    } catch (error) {
+        console.error('Error updating book:', error.message);
+        return res.status(500).json({ error: 'Error updating book' });
+    }
 });
+
 
 
 // Start the server
